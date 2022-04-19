@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # v0.4e 3/1/21 - Joe Elliott
+# Updated to post JSON data to Node-Red by Techn0Hippy 
 
 # If you encounter errors like - AttributeError: module 'serial' has no attribute 'Serial'
 # pip3 uninstall pyserial
@@ -13,10 +14,22 @@ import minimalmodbus
 import serial
 import sys, os, io
 import time 
+import json
+import os
+import requests
 
 debug = False
-sleepTime = 10
+#sleepTime = 10
+sleepTime = 900
+
 devName = '/dev/ttyUSB0'
+
+url = 'http://192.168.0.2:1880/solarshed'
+id = 1
+
+curpvamps = 0
+curpvwatts = 0
+todayscharge = 0 
 
 if (len(sys.argv) > 1):
         if (sys.argv[1] == "-d"):
@@ -86,6 +99,8 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {batVolts}"
                 print(dataStr, file=fileObj)
+                JSONbatvolts = {'batvolts': batVolts}
+                print ("Battery Volts = ", JSONbatvolts)
 
                 register = renogy.read_register(0x102)
                 if (debug): print("Charging Amps:", float(register/100), "a")
@@ -115,6 +130,8 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {loadWatts}"
                 print(dataStr, file=fileObj)
+                JSONloadwatts = {'loadwatts': loadWatts}
+                print ("Load Watts = ", JSONloadwatts) 
 
                 register = renogy.read_register(0x107)
                 if (debug): print("PV volts:", float(register/10), "v")
@@ -122,6 +139,9 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/10)}"
                 print(dataStr, file=fileObj)
+		#testing
+                JSONpvvolts = {'pvvolts': float(register/10)}
+                print ("PV volts = ", JSONpvvolts) 
 
                 register = renogy.read_register(0x108)
                 if (debug): print("PV amps:", float(register/100), "a")
@@ -129,6 +149,10 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/100)}"
                 print(dataStr, file=fileObj)
+                #JSONpvamps = {'pvamps': float(register/100)}
+                JSONpvamps = float(register/100)
+                print ("PV amps = ", JSONpvamps)
+                curpvamps = str(JSONpvamps) 
 
                 pvWatts = renogy.read_register(0x109)
                 if (debug): print("PV watts:", pvWatts, "w")
@@ -136,6 +160,10 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {pvWatts}"
                 print(dataStr, file=fileObj)
+                #JSONpvwatts = {'pvwatts': pvWatts}
+                JSONpvwatts = pvWatts
+                print ("PV Watts = ", JSONpvwatts) 
+                curpvwatts = str(JSONpvwatts) 
 
                 register = renogy.read_register(0x10B)
                 if (debug): print("bat max volts:", float(register)/10, "v")
@@ -157,6 +185,13 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/1)}"
                 print(dataStr, file=fileObj)
+                #JSONcharge = {'charge': float(register/1)}
+                JSONcharge = float(register/1)
+                print ("Todays Charged Watts 0  = ", JSONcharge)
+                todayscharge = str(JSONcharge)
+                print ("Charge VAR = ", todayscharge)
+
+                
 
                 register = renogy.read_register(0x110)
                 if (debug): print("todays discharge power:", float(register)/1, "w")
@@ -164,6 +199,8 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/1)}"
                 print(dataStr, file=fileObj)
+                JSONdischarge = {'discharge': float(register/1)}
+                print ("Todays Discharged Watts = ", JSONdischarge) 
 
                 register = renogy.read_register(0x120)
                 chargeStateNum = register & 0x00ff
@@ -190,6 +227,8 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/10)}"
                 print(dataStr, file=fileObj)
+                JSONgenerated= {'generated': float(register/10)}
+                print ("Todays Generated Watts = ", JSONgenerated)
 
                 register = renogy.read_register(0x114)
                 if (debug): print("todays consumed power:", float(register)/10, "w/h")
@@ -197,6 +236,8 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/10)}"
                 print(dataStr, file=fileObj)
+                JSONconsumed= {'consumed': float(register/10)}
+                print ("Todays Consumed Watts = ", JSONconsumed)
 
                 register = renogy.read_register(0x115)
                 if (debug): print("up days:", register, "days")
@@ -212,6 +253,12 @@ def readRenogy(fileObj):
                 dataStr  = f"Renogy{valName} {register}"
                 print(dataStr, file=fileObj)
 
+                #Post Collected JSON 
+                payload = {'id': id, 'currentpvamps': curpvamps, 'currentpvwatts': curpvwatts, 'todayscharge': todayscharge}
+                data = json.dumps(payload)
+                r = requests.post(url, data=payload, verify=False)
+                print(r.text)
+                #
                 return
 
                 register = renogy.read_register(0xE003)
@@ -256,6 +303,7 @@ def readRenogy(fileObj):
                 register = renogy.read_register(0xE012)
                 if (debug): print("Boost time:", register, "mins")
 
+
         except IOError:
                 print("Failed to read from instrument")
 
@@ -269,6 +317,13 @@ while True:
 
         if (debug): print("\nReading Renogy Wanderer data...")
         readRenogy(file_object)
+
+        # Adding JSON Post
+        #payload = {'id': id, 'currentpvamps': curpvamps, 'currentpvwatts': curpvwatts, 'todayscharge': todayscharge}
+        #data = json.dumps(payload)
+        #r = requests.post(url, data=payload, verify=False)
+        #print(r.text)
+        #
 
         file_object.flush()
         file_object.close()
