@@ -30,6 +30,9 @@ id = 1
 curpvamps = 0
 curpvwatts = 0
 todayscharge = 0 
+todaysdischarge = 0
+curload = 0
+curbattery = 0
 
 if (len(sys.argv) > 1):
         if (sys.argv[1] == "-d"):
@@ -101,6 +104,8 @@ def readRenogy(fileObj):
                 print(dataStr, file=fileObj)
                 JSONbatvolts = {'batvolts': batVolts}
                 print ("Battery Volts = ", JSONbatvolts)
+                curbattery = str(batVolts)
+
 
                 register = renogy.read_register(0x102)
                 if (debug): print("Charging Amps:", float(register/100), "a")
@@ -132,6 +137,7 @@ def readRenogy(fileObj):
                 print(dataStr, file=fileObj)
                 JSONloadwatts = {'loadwatts': loadWatts}
                 print ("Load Watts = ", JSONloadwatts) 
+                curload = str(loadWatts) 
 
                 register = renogy.read_register(0x107)
                 if (debug): print("PV volts:", float(register/10), "v")
@@ -199,8 +205,9 @@ def readRenogy(fileObj):
                 valName  = "{" + valName + "}"
                 dataStr  = f"Renogy{valName} {float(register/1)}"
                 print(dataStr, file=fileObj)
-                JSONdischarge = {'discharge': float(register/1)}
-                print ("Todays Discharged Watts = ", JSONdischarge) 
+                JSONdischarge = float(register/1)
+                print ("Todays Discharged Watts = ", JSONdischarge)
+                todaysdischarge = str(JSONdischarge)
 
                 register = renogy.read_register(0x120)
                 chargeStateNum = register & 0x00ff
@@ -254,7 +261,7 @@ def readRenogy(fileObj):
                 print(dataStr, file=fileObj)
 
                 #Post Collected JSON 
-                payload = {'id': id, 'currentpvamps': curpvamps, 'currentpvwatts': curpvwatts, 'todayscharge': todayscharge}
+                payload = {'id': id, 'currentpvamps': curpvamps, 'currentpvwatts': curpvwatts, 'todayscharge': todayscharge, 'todaysdischarge': todaysdischarge, 'curload': curload, 'curbattery': curbattery}
                 data = json.dumps(payload)
                 r = requests.post(url, data=payload, verify=False)
                 print(r.text)
@@ -317,13 +324,6 @@ while True:
 
         if (debug): print("\nReading Renogy Wanderer data...")
         readRenogy(file_object)
-
-        # Adding JSON Post
-        #payload = {'id': id, 'currentpvamps': curpvamps, 'currentpvwatts': curpvwatts, 'todayscharge': todayscharge}
-        #data = json.dumps(payload)
-        #r = requests.post(url, data=payload, verify=False)
-        #print(r.text)
-        #
 
         file_object.flush()
         file_object.close()
